@@ -3,7 +3,7 @@
  * Handles drag-and-drop, clip resizing, playhead, and ruler rendering
  */
 
-import { Timeline } from '../engine/timeline.js?v=6';
+import { Timeline } from '../engine/timeline.js?v=7';
 
 export class TimelineUI {
   constructor(timeline, options = {}) {

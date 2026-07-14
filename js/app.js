@@ -3,13 +3,13 @@
  * Wires all engines together: renderer, timeline, visualizer, subtitles, overlays, exporter
  */
 
-import { Renderer }        from './engine/renderer.js?v=6';
-import { Timeline }        from './engine/timeline.js?v=6';
-import { Visualizer }      from './engine/visualizer.js?v=6';
-import { Exporter }        from './engine/exporter.js?v=6';
-import { SubtitleManager } from './subtitle/subtitle.js?v=6';
-import { TimelineUI }      from './ui/timeline-ui.js?v=6';
-import { OverlayManager }  from './overlay/overlay.js?v=6';
+import { Renderer }        from './engine/renderer.js?v=7';
+import { Timeline }        from './engine/timeline.js?v=7';
+import { Visualizer }      from './engine/visualizer.js?v=7';
+import { Exporter }        from './engine/exporter.js?v=7';
+import { SubtitleManager } from './subtitle/subtitle.js?v=7';
+import { TimelineUI }      from './ui/timeline-ui.js?v=7';
+import { OverlayManager }  from './overlay/overlay.js?v=7';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -934,7 +934,6 @@ class KepKatApp {
     // 2. Decode at original sample rate
     const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
     const originalAudioBuf = await tempCtx.decodeAudioData(arrayBuf);
-    await tempCtx.close();
 
     // 3. Resample to 16000Hz using OfflineAudioContext (Mono)
     const targetSampleRate = 16000;
@@ -950,6 +949,14 @@ class KepKatApp {
     bufferSource.start(0);
 
     const resampledAudioBuf = await offlineCtx.startRendering();
+    
+    // Safely close context after processing
+    try {
+      await tempCtx.close();
+    } catch (e) {
+      console.warn('Gagal menutup temp AudioContext:', e);
+    }
+
     return resampledAudioBuf.getChannelData(0);
   }
 
