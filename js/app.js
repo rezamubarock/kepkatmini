@@ -391,11 +391,11 @@ class KepKatApp {
       const id  = `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const url = URL.createObjectURL(file);
 
-      // Extract audio data immediately using the stable Object URL (never expires or throws permission issues)
+      // Extract audio data immediately using the File object (never blocked by CORS or COEP)
       let audioData = null;
       if (type === 'video' || type === 'audio') {
         try {
-          audioData = await this._extractAudio(url);
+          audioData = await this._extractAudio(file);
         } catch (err) {
           console.warn('Gagal ekstrak audio langsung saat import:', err);
         }
@@ -861,15 +861,19 @@ class KepKatApp {
     // Use pre-extracted audio data if available, or extract it now
     const clip = clips[0];
     let audioData = clip.audioData;
+    const file = clip.file;
     const blobUrl = clip.mediaUrl;
 
     try {
       if (!audioData) {
-        if (!blobUrl) {
-          throw new Error('URL media tidak ditemukan.');
-        }
         textEl.textContent = 'Mengekstrak audio dari video...';
-        audioData = await this._extractAudio(blobUrl);
+        if (file) {
+          audioData = await this._extractAudio(file);
+        } else if (blobUrl) {
+          audioData = await this._extractAudio(blobUrl);
+        } else {
+          throw new Error('File sumber atau URL media tidak ditemukan.');
+        }
       }
       if (!audioData || audioData.length === 0) {
         throw new Error('Ekstraksi audio menghasilkan data kosong.');
@@ -914,15 +918,21 @@ class KepKatApp {
     }
   }
 
-  async _extractAudio(blobUrl) {
-    // 1. Fetch file and decode at original sample rate
+  async _extractAudio(fileOrUrl) {
+    let arrayBuf;
+    if (typeof fileOrUrl === 'string') {
+      const response = await fetch(fileOrUrl);
+      arrayBuf = await response.arrayBuffer();
+    } else {
+      arrayBuf = await fileOrUrl.arrayBuffer();
+    }
+
+    // 2. Decode at original sample rate
     const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const response = await fetch(blobUrl);
-    const arrayBuf = await response.arrayBuffer();
     const originalAudioBuf = await tempCtx.decodeAudioData(arrayBuf);
     await tempCtx.close();
 
-    // 2. Resample to 16000Hz using OfflineAudioContext (Mono)
+    // 3. Resample to 16000Hz using OfflineAudioContext (Mono)
     const targetSampleRate = 16000;
     const offlineCtx = new OfflineAudioContext(
       1,
