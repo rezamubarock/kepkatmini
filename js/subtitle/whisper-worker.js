@@ -1,75 +1,65 @@
 /**
- * KepKat Mini — Whisper Web Worker
- * Runs Whisper via @xenova/transformers in a Web Worker.
+ * KepKat Mini — Whisper Web Worker (ES Module version)
+ * Runs Whisper via @xenova/transformers.
  */
-
-// Construct absolute URL for local transformers.min.js based on worker's location
-const workerDir = self.location.href.substring(0, self.location.href.lastIndexOf('/') + 1);
-const LOCAL_TRANSFORMERS = workerDir + 'transformers.min.js';
-
-const CDN_FALLBACKS = [
-  'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js',
-  'https://unpkg.com/@xenova/transformers@2.17.2/dist/transformers.min.js',
-];
 
 let pipeline = null;
 let env = null;
 let initError = null;
 const errorsCollected = [];
 
-function tryLoadTransformers() {
-  // 1. Try local copy first (most reliable, same-origin)
-  try {
-    console.log('[WhisperWorker] Attempting local load from:', LOCAL_TRANSFORMERS);
-    importScripts(LOCAL_TRANSFORMERS);
-    if (self.transformers) {
-      console.log('[WhisperWorker] Loaded transformers from local repo ✅');
-      return true;
-    } else {
-      errorsCollected.push('Local load succeeded but self.transformers is undefined');
-    }
-  } catch (e) {
-    const msg = `Local load failed (${LOCAL_TRANSFORMERS}): ${e.message}`;
-    console.warn('[WhisperWorker]', msg);
-    errorsCollected.push(msg);
-  }
+async function initTransformers() {
+  // Use absolute URL constructed from worker's location for the local copy
+  const workerDir = self.location.href.substring(0, self.location.href.lastIndexOf('/') + 1);
+  const localUrl = workerDir + 'transformers.min.js';
 
-  // 2. Fallback to CDNs
-  for (const url of CDN_FALLBACKS) {
+  const targets = [
+    { name: 'Local Repo', url: localUrl },
+    { name: 'JSDelivr CDN', url: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js' },
+    { name: 'Unpkg CDN', url: 'https://unpkg.com/@xenova/transformers@2.17.2/dist/transformers.min.js' }
+  ];
+
+  for (const target of targets) {
     try {
-      console.log('[WhisperWorker] Attempting CDN load from:', url);
-      importScripts(url);
-      if (self.transformers) {
-        console.log('[WhisperWorker] Loaded transformers from CDN ✅:', url);
+      console.log(`[WhisperWorker] Attempting import from ${target.name}:`, target.url);
+      const module = await import(target.url);
+      
+      // Some webpack/UMD builds export named bindings, others set globals
+      const activePipeline = module?.pipeline || self.transformers?.pipeline;
+      const activeEnv = module?.env || self.transformers?.env;
+
+      if (activePipeline) {
+        pipeline = activePipeline;
+        env = activeEnv;
+        console.log(`[WhisperWorker] Loaded successfully from ${target.name} ✅`);
         return true;
       } else {
-        errorsCollected.push(`CDN load succeeded but self.transformers is undefined for ${url}`);
+        errorsCollected.push(`${target.name}: Import succeeded but pipeline is not exported`);
       }
     } catch (e) {
-      const msg = `CDN load failed for ${url}: ${e.message}`;
+      const msg = `${target.name} failed: ${e.message}`;
       console.warn('[WhisperWorker]', msg);
       errorsCollected.push(msg);
     }
   }
-
   return false;
 }
 
-const loaded = tryLoadTransformers();
+// Top-level await is fully supported in ES Module Workers
+const loaded = await initTransformers();
 
-if (loaded && self.transformers) {
+if (loaded && pipeline) {
   try {
-    ({ pipeline, env } = self.transformers);
     env.allowLocalModels = false;
     env.useBrowserCache  = true;
     env.backends.onnx.wasm.proxy = false;
     env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
   } catch (e) {
-    initError = 'Transformers config error: ' + e.message;
+    initError = 'Config error: ' + e.message;
     console.error('[WhisperWorker]', initError);
   }
 } else {
-  initError = 'Gagal memuat library Whisper. Detail Error:\n' + errorsCollected.join('\n');
+  initError = 'Gagal memuat library Whisper.\nDetail Error:\n' + errorsCollected.join('\n');
   console.error('[WhisperWorker]', initError);
 }
 

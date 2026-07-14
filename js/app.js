@@ -10,7 +10,7 @@ import { Exporter }        from './engine/exporter.js?v=7';
 import { SubtitleManager } from './subtitle/subtitle.js?v=7';
 import { TimelineUI }      from './ui/timeline-ui.js?v=7';
 import { OverlayManager }  from './overlay/overlay.js?v=7';
-import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=13';
+import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=14';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -883,7 +883,7 @@ class KepKatApp {
       barEl.style.width  = '5%';
 
       if (this._whisperWorker) this._whisperWorker.terminate();
-      this._whisperWorker = new Worker('./js/subtitle/whisper-worker.js?v=13');
+      this._whisperWorker = new Worker('./js/subtitle/whisper-worker.js?v=14', { type: 'module' });
 
       this._whisperWorker.onmessage = (e) => {
         const { type, value, text, segments, message } = e.data;
