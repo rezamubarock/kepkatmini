@@ -5,36 +5,36 @@
 /* ---- CSS Variables / Design Tokens ---- */
 :root {
   /* Colors */
-  --bg-base:        #0a0a12;
-  --bg-surface:     #0f0f1a;
-  --bg-elevated:    #14141f;
-  --bg-overlay:     #1a1a2e;
-  --bg-hover:       #1e1e30;
-  --bg-active:      #23233a;
+  --bg-base:        #111215;      /* Deep slate dark carbon */
+  --bg-surface:     #18191c;      /* Solid surface gray */
+  --bg-elevated:    #202125;      /* Elevated panels gray */
+  --bg-overlay:     #2a2b30;      /* Overlay/active panel gray */
+  --bg-hover:       #2f3136;      /* Hover highlight gray */
+  --bg-active:      #383a40;      /* Selected active gray */
 
-  --border:         #ffffff0f;
-  --border-subtle:  #ffffff08;
-  --border-focus:   #a855f730;
+  --border:         #323438;      /* Solid workstation borders */
+  --border-subtle:  #242528;      /* Subtle track separations */
+  --border-focus:   #2563eb;      /* Professional blue selection */
 
   /* Brand */
-  --purple:         #a855f7;
-  --purple-dark:    #7c3aed;
-  --purple-light:   #c084fc;
-  --cyan:           #06b6d4;
-  --cyan-dark:      #0891b2;
-  --cyan-light:     #22d3ee;
-  --pink:           #ec4899;
+  --purple:         #2563eb;      /* Workstation Blue */
+  --purple-dark:    #1d4ed8;      /* Darker workstation blue */
+  --purple-light:   #60a5fa;      /* Lighter blue highlight */
+  --cyan:           #3b82f6;      /* Accent secondary blue */
+  --cyan-dark:      #1d4ed8;
+  --cyan-light:     #93c5fd;
+  --pink:           #f59e0b;      /* Classic amber warning/accent */
 
   /* Gradients */
-  --grad-brand:     linear-gradient(135deg, #a855f7, #06b6d4);
-  --grad-surface:   linear-gradient(180deg, #14141f 0%, #0f0f1a 100%);
-  --grad-glow:      radial-gradient(ellipse at 50% 0%, #a855f720 0%, transparent 60%);
+  --grad-brand:     linear-gradient(135deg, #2563eb, #3b82f6);
+  --grad-surface:   linear-gradient(180deg, #202125 0%, #18191c 100%);
+  --grad-glow:      none;         /* Clean, solid workstation style */
 
   /* Text */
-  --text-primary:   #f0f0ff;
-  --text-secondary: #9999bb;
+  --text-primary:   #e2e8f0;      /* Off-white text */
+  --text-secondary: #94a3b8;      /* Neutral slate-gray text */
   --text-muted:     #555577;
-  --text-accent:    #a855f7;
+  --text-accent:    #60a5fa;
 
   /* Semantic */
   --success:        #10b981;

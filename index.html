@@ -332,29 +332,7 @@
                 Aktifkan Visualizer
               </label>
             </div>
-            <div class="viz-types">
-              <button class="viz-type-btn active" data-viz="bars" id="viz-bars">
-                <svg viewBox="0 0 24 24" width="24" height="24"><rect x="2" y="10" width="4" height="10"/><rect x="9" y="4" width="4" height="16"/><rect x="16" y="7" width="4" height="13"/></svg>
-                <span>Bar</span>
-              </button>
-              <button class="viz-type-btn" data-viz="wave" id="viz-wave">
-                <svg viewBox="0 0 24 24" width="24" height="24"><path d="M2 12 C4 6 8 18 12 12 C16 6 20 18 22 12"/></svg>
-                <span>Wave</span>
-              </button>
-              <button class="viz-type-btn" data-viz="circle" id="viz-circle">
-                <svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>
-                <span>Lingkaran</span>
-              </button>
-              <button class="viz-type-btn" data-viz="spectrum" id="viz-spectrum">
-                <svg viewBox="0 0 24 24" width="24" height="24"><path d="M2 20 L5 8 L8 14 L11 5 L14 11 L17 3 L20 9 L22 20"/></svg>
-                <span>Spectrum</span>
-              </button>
-              <button class="viz-type-btn" data-viz="particle" id="viz-particle">
-                <svg viewBox="0 0 24 24" width="24" height="24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="12" cy="18" r="2"/><circle cx="12" cy="12" r="1"/></svg>
-                <span>Partikel</span>
-              </button>
-            </div>
-            <div class="viz-settings">
+             <div class="viz-settings">
               <div class="style-row">
                 <label>Warna 1</label>
                 <input type="color" id="viz-color1" value="#a855f7" />
@@ -366,6 +344,18 @@
               <div class="style-row">
                 <label>Sensitivitas</label>
                 <input type="range" id="viz-sensitivity" min="1" max="10" value="5" />
+              </div>
+              <div class="style-row">
+                <label>Jumlah Bar</label>
+                <input type="range" id="viz-bar-count" min="16" max="128" value="64" />
+              </div>
+              <div class="style-row">
+                <label>Jarak Spacing</label>
+                <input type="range" id="viz-spacing" min="0" max="10" value="2" />
+              </div>
+              <div class="style-row">
+                <label>Transparansi</label>
+                <input type="range" id="viz-opacity" min="10" max="100" value="100" />
               </div>
             </div>
           </div>

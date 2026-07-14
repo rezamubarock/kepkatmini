@@ -266,14 +266,8 @@ class KepKatApp {
         this.overlayMgr.removeOverlay('viz_overlay');
       }
     });
-    document.querySelectorAll('.viz-type-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.viz-type-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.visualizer.setMode(btn.dataset.viz);
-      });
-    });
-    const vizSettings = ['viz-color1','viz-color2','viz-sensitivity'];
+
+    const vizSettings = ['viz-color1','viz-color2','viz-sensitivity','viz-bar-count','viz-spacing','viz-opacity'];
     vizSettings.forEach(id => {
       document.getElementById(id).addEventListener('input', () => this._updateVisualizerSettings());
     });
@@ -371,7 +365,12 @@ class KepKatApp {
     this.timeline.on('playStateChanged', (playing) => {
       document.getElementById('icon-play').classList.toggle('hidden', playing);
       document.getElementById('icon-pause').classList.toggle('hidden', !playing);
-      if (playing) this._connectVisualizerToMedia();
+      if (playing) {
+        this._connectVisualizerToMedia();
+      } else {
+        // Pause: Center the playhead in the timeline viewport
+        this.timelineUI.scrollToTime(this.timeline.currentTime);
+      }
     });
     this.timeline.on('ended', () => {
       this._pauseAllVideo();
@@ -389,6 +388,20 @@ class KepKatApp {
                  : null;
       if (!type) { toast(`Format tidak didukung: ${file.name}`, 'error'); continue; }
 
+      // Extract audio data immediately in the first event loop tick to ensure permission
+      let audioData = null;
+      if (type === 'video' || type === 'audio') {
+        try {
+          const arrayBuf = await file.arrayBuffer();
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+          const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+          audioData = audioBuf.getChannelData(0);
+          await audioCtx.close();
+        } catch (err) {
+          console.warn('Gagal ekstrak audio langsung saat import:', err);
+        }
+      }
+
       const id  = `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const url = URL.createObjectURL(file);
 
@@ -405,7 +418,7 @@ class KepKatApp {
         thumbnailUrl = url;
       }
 
-      mediaStore.set(id, { id, file, url, type, duration, name: file.name, thumbnailUrl });
+      mediaStore.set(id, { id, file, url, type, duration, name: file.name, thumbnailUrl, audioData });
       this._renderMediaItem(id);
 
       // Auto-add to first available track
@@ -522,12 +535,7 @@ class KepKatApp {
       await vid.load();
       videoElement = vid;
 
-      // Extract audio immediately while file reference is readable
-      try {
-        audioData = await this._extractAudio(media.file);
-      } catch (err) {
-        console.warn('Gagal ekstrak audio saat impor:', err);
-      }
+      audioData = media.audioData;
     } else if (media.type === 'image') {
       const img = new Image();
       img.src = media.url;
@@ -991,6 +999,9 @@ class KepKatApp {
       color1:      document.getElementById('viz-color1').value,
       color2:      document.getElementById('viz-color2').value,
       sensitivity: parseInt(document.getElementById('viz-sensitivity').value),
+      barCount:    parseInt(document.getElementById('viz-bar-count').value),
+      spacing:     parseInt(document.getElementById('viz-spacing').value),
+      opacity:     parseFloat(document.getElementById('viz-opacity').value) / 100,
     });
   }
 
