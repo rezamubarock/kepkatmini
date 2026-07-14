@@ -866,6 +866,18 @@ class KepKatApp {
     let audioData = clip.audioData;
     const file = clip.file;
     const blobUrl = clip.mediaUrl;
+    const duration = clip.duration || 0;
+    const fileSizeMB = file ? (file.size / (1024 * 1024)) : 0;
+
+    if (clip.type === 'video' && (duration > 600 || fileSizeMB > 100)) {
+      const confirmRun = confirm(
+        `Video Anda sangat besar (ukuran: ${Math.round(fileSizeMB)} MB, durasi: ${Math.round(duration / 60)} menit).\n\n` +
+        `Mengekstrak audio dari video panjang secara langsung di browser seringkali melebihi limit memori browser dan menyebabkan kegagalan (crash).\n\n` +
+        `Solusi Terbaik: Silakan convert video Anda menjadi file audio (MP3 atau WAV) terlebih dahulu (menggunakan web converter gratis atau tool offline), lalu import file audio hasil konversi tersebut ke timeline untuk auto-subtitle.\n\n` +
+        `Apakah Anda tetap ingin mencoba memproses video secara langsung?`
+      );
+      if (!confirmRun) return;
+    }
 
     try {
       if (!audioData) {
@@ -911,8 +923,8 @@ class KepKatApp {
     } catch (err) {
       console.error(err);
       let errMsg = err.message || "";
-      if (err.name === 'NotReadableError') {
-        errMsg = "File sedang dikunci oleh program lain (seperti VIZPRO) atau ukuran terlalu besar. Silakan tutup VIZPRO, salin file video ke folder lain (seperti Desktop), atau gunakan video yang lebih kecil.";
+      if (err.name === 'NotReadableError' || err.name === 'RangeError' || err.message?.toLowerCase().includes('decode') || fileSizeMB > 50) {
+        errMsg = `Ukuran file terlalu besar (${Math.round(fileSizeMB)} MB) untuk diproses langsung di browser.\n\nSolusi: Silakan convert video Anda menjadi file audio (MP3 atau WAV) terlebih dahulu, lalu import file audio hasil konversi ke timeline untuk auto-subtitle.`;
       } else {
         errMsg = `[${err.name}] ${err.message}`;
       }
