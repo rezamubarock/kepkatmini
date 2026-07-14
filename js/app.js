@@ -915,13 +915,28 @@ class KepKatApp {
   }
 
   async _extractAudio(blobUrl) {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    // 1. Fetch file and decode at original sample rate
+    const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
     const response = await fetch(blobUrl);
     const arrayBuf = await response.arrayBuffer();
-    const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
-    const channelData = audioBuf.getChannelData(0);
-    await audioCtx.close();
-    return channelData;
+    const originalAudioBuf = await tempCtx.decodeAudioData(arrayBuf);
+    await tempCtx.close();
+
+    // 2. Resample to 16000Hz using OfflineAudioContext (Mono)
+    const targetSampleRate = 16000;
+    const offlineCtx = new OfflineAudioContext(
+      1,
+      Math.round(originalAudioBuf.duration * targetSampleRate),
+      targetSampleRate
+    );
+
+    const bufferSource = offlineCtx.createBufferSource();
+    bufferSource.buffer = originalAudioBuf;
+    bufferSource.connect(offlineCtx.destination);
+    bufferSource.start(0);
+
+    const resampledAudioBuf = await offlineCtx.startRendering();
+    return resampledAudioBuf.getChannelData(0);
   }
 
   _addManualSubtitle() {

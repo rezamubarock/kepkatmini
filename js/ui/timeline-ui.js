@@ -406,9 +406,32 @@ export class TimelineUI {
         if (wrapper) wrapper.scrollLeft = this._tracksEl.scrollLeft;
       });
 
-      // Mouse wheel horizontal scroll on tracks area
+      // Mouse wheel horizontal scroll and zoom on tracks area
       this._tracksEl.addEventListener('wheel', (e) => {
-        if (Math.abs(e.deltaY) > 0 && !e.shiftKey) {
+        if (e.ctrlKey) {
+          e.preventDefault();
+          // Zoom factor: negative deltaY is zoom in, positive is zoom out
+          const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+          // pixelsPerSecond range: 10px to 1024px
+          const newPps = Math.max(10, Math.min(1024, this.pixelsPerSecond * zoomFactor));
+
+          // Calculate time position under the mouse to anchor zoom
+          const rect = this._tracksEl.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const timelineX = mouseX + this._tracksEl.scrollLeft;
+          const timeAtMouse = timelineX / this.pixelsPerSecond;
+
+          this.setZoom(newPps);
+
+          // Center zoom scroll alignment
+          this._tracksEl.scrollLeft = timeAtMouse * newPps - mouseX;
+
+          // Sync zoom slider (logarithmic inverse: val = Math.log2(pps / 10))
+          const zoomSlider = document.getElementById('zoom-slider');
+          if (zoomSlider) {
+            zoomSlider.value = Math.log2(newPps / 10);
+          }
+        } else if (Math.abs(e.deltaY) > 0 && !e.shiftKey) {
           e.preventDefault();
           this._tracksEl.scrollLeft += e.deltaY;
         }
