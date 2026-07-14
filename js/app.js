@@ -848,11 +848,11 @@ class KepKatApp {
     const clips = [];
     for (const track of this.timeline.tracks) {
       for (const clip of track.clips) {
-        if (clip.videoElement) clips.push(clip);
+        if (clip.videoElement || clip.type === 'audio') clips.push(clip);
       }
     }
     if (clips.length === 0) {
-      toast('Import video terlebih dahulu untuk auto subtitle', 'warning');
+      toast('Import video atau audio terlebih dahulu untuk auto subtitle', 'warning');
       return;
     }
 
