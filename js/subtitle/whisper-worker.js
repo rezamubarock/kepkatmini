@@ -1,54 +1,59 @@
 /**
  * KepKat Mini — Whisper Web Worker
  * Runs Whisper via @xenova/transformers in a Web Worker.
- *
- * Communication protocol (postMessage):
- *  → { type: 'transcribe', audioData: Float32Array, lang: 'auto' }
- *  ← { type: 'progress', value: 0-100, text: string }
- *  ← { type: 'result', segments: [{start, end, text}] }
- *  ← { type: 'error', message: string }
  */
 
-// ── Load transformers.js — local copy first, CDN as fallback ────────────────
-// Local copy (bundled in repo, loads from GitHub Pages — no CDN dependency)
-const LOCAL_TRANSFORMERS = './transformers.min.js';
+// Construct absolute URL for local transformers.min.js based on worker's location
+const workerDir = self.location.href.substring(0, self.location.href.lastIndexOf('/') + 1);
+const LOCAL_TRANSFORMERS = workerDir + 'transformers.min.js';
 
 const CDN_FALLBACKS = [
   'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js',
   'https://unpkg.com/@xenova/transformers@2.17.2/dist/transformers.min.js',
 ];
 
+let pipeline = null;
+let env = null;
+let initError = null;
+const errorsCollected = [];
+
 function tryLoadTransformers() {
-  // 1. Try local copy first (most reliable)
+  // 1. Try local copy first (most reliable, same-origin)
   try {
+    console.log('[WhisperWorker] Attempting local load from:', LOCAL_TRANSFORMERS);
     importScripts(LOCAL_TRANSFORMERS);
     if (self.transformers) {
       console.log('[WhisperWorker] Loaded transformers from local repo ✅');
       return true;
+    } else {
+      errorsCollected.push('Local load succeeded but self.transformers is undefined');
     }
   } catch (e) {
-    console.warn('[WhisperWorker] Local transformers failed:', e.message);
+    const msg = `Local load failed (${LOCAL_TRANSFORMERS}): ${e.message}`;
+    console.warn('[WhisperWorker]', msg);
+    errorsCollected.push(msg);
   }
 
-  // 2. Fallback to CDN
+  // 2. Fallback to CDNs
   for (const url of CDN_FALLBACKS) {
     try {
+      console.log('[WhisperWorker] Attempting CDN load from:', url);
       importScripts(url);
       if (self.transformers) {
-        console.log('[WhisperWorker] Loaded transformers from CDN:', url);
+        console.log('[WhisperWorker] Loaded transformers from CDN ✅:', url);
         return true;
+      } else {
+        errorsCollected.push(`CDN load succeeded but self.transformers is undefined for ${url}`);
       }
     } catch (e) {
-      console.warn('[WhisperWorker] CDN failed:', url, e.message);
+      const msg = `CDN load failed for ${url}: ${e.message}`;
+      console.warn('[WhisperWorker]', msg);
+      errorsCollected.push(msg);
     }
   }
 
   return false;
 }
-
-let pipeline = null;
-let env = null;
-let initError = null;
 
 const loaded = tryLoadTransformers();
 
@@ -58,19 +63,17 @@ if (loaded && self.transformers) {
     env.allowLocalModels = false;
     env.useBrowserCache  = true;
     env.backends.onnx.wasm.proxy = false;
-    // Keep ONNX WASM on CDN (too large to bundle, but loads reliably)
-    env.backends.onnx.wasm.wasmPaths =
-      'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
+    env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
   } catch (e) {
-    initError = 'Transformers init error: ' + e.message;
+    initError = 'Transformers config error: ' + e.message;
     console.error('[WhisperWorker]', initError);
   }
 } else {
-  initError = 'Gagal memuat library Whisper. Periksa koneksi internet Anda.';
+  initError = 'Gagal memuat library Whisper. Detail Error:\n' + errorsCollected.join('\n');
   console.error('[WhisperWorker]', initError);
 }
 
-// ── Model loader (cached in browser IndexedDB after first download) ──────────
+// ── Model loader ─────────────────────────────────────────────────────────────
 
 let transcriber = null;
 
