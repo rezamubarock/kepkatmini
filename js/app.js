@@ -10,7 +10,7 @@ import { Exporter }        from './engine/exporter.js?v=7';
 import { SubtitleManager } from './subtitle/subtitle.js?v=7';
 import { TimelineUI }      from './ui/timeline-ui.js?v=7';
 import { OverlayManager }  from './overlay/overlay.js?v=7';
-import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=11';
+import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=12';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
