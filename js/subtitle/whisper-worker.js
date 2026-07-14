@@ -9,32 +9,46 @@
  *  ← { type: 'error', message: string }
  */
 
-// ── Try multiple CDN sources for resilience ──────────────────────────────────
-const TRANSFORMERS_CDNS = [
+// ── Load transformers.js — local copy first, CDN as fallback ────────────────
+// Local copy (bundled in repo, loads from GitHub Pages — no CDN dependency)
+const LOCAL_TRANSFORMERS = './transformers.min.js';
+
+const CDN_FALLBACKS = [
   'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js',
   'https://unpkg.com/@xenova/transformers@2.17.2/dist/transformers.min.js',
-  'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.2/dist/transformers.min.js',
-  'https://unpkg.com/@xenova/transformers@2.6.2/dist/transformers.min.js',
 ];
 
-let pipeline = null;
-let env = null;
-let initError = null;
-
 function tryLoadTransformers() {
-  for (const url of TRANSFORMERS_CDNS) {
+  // 1. Try local copy first (most reliable)
+  try {
+    importScripts(LOCAL_TRANSFORMERS);
+    if (self.transformers) {
+      console.log('[WhisperWorker] Loaded transformers from local repo ✅');
+      return true;
+    }
+  } catch (e) {
+    console.warn('[WhisperWorker] Local transformers failed:', e.message);
+  }
+
+  // 2. Fallback to CDN
+  for (const url of CDN_FALLBACKS) {
     try {
       importScripts(url);
       if (self.transformers) {
-        console.log('[WhisperWorker] Loaded transformers from:', url);
+        console.log('[WhisperWorker] Loaded transformers from CDN:', url);
         return true;
       }
     } catch (e) {
       console.warn('[WhisperWorker] CDN failed:', url, e.message);
     }
   }
+
   return false;
 }
+
+let pipeline = null;
+let env = null;
+let initError = null;
 
 const loaded = tryLoadTransformers();
 
@@ -44,16 +58,19 @@ if (loaded && self.transformers) {
     env.allowLocalModels = false;
     env.useBrowserCache  = true;
     env.backends.onnx.wasm.proxy = false;
+    // Keep ONNX WASM on CDN (too large to bundle, but loads reliably)
+    env.backends.onnx.wasm.wasmPaths =
+      'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
   } catch (e) {
     initError = 'Transformers init error: ' + e.message;
     console.error('[WhisperWorker]', initError);
   }
 } else {
-  initError = 'Gagal memuat library Whisper dari semua CDN. Periksa koneksi internet Anda.';
+  initError = 'Gagal memuat library Whisper. Periksa koneksi internet Anda.';
   console.error('[WhisperWorker]', initError);
 }
 
-// ── Model loader (cached after first load) ───────────────────────────────────
+// ── Model loader (cached in browser IndexedDB after first download) ──────────
 
 let transcriber = null;
 
@@ -91,7 +108,6 @@ self.addEventListener('message', async (e) => {
   const { type, audioData, lang = 'auto' } = e.data;
   if (type !== 'transcribe') return;
 
-  // Report init error immediately if library failed to load
   if (initError) {
     self.postMessage({ type: 'error', message: initError });
     return;
