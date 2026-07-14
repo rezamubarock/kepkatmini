@@ -2,110 +2,132 @@
  * KepKat Mini — Client-side Audio Extractor
  *
  * Strategy:
- *  1. Create a hidden <video> element with the file's blob URL.
+ *  1. Create a hidden <video> element pointed at the media source (blob URL or File).
  *  2. Tap the audio stream via AudioContext.createMediaElementSource().
  *  3. Use a ScriptProcessorNode to collect raw PCM (Float32) samples
  *     as the video plays at 16× speed.
- *  4. Merge all captured samples and downsample to 16 kHz mono for Whisper.
+ *  4. Merge all captured samples — AudioContext is created at 16 kHz
+ *     so no resampling needed for Whisper.
  *
  * This approach:
- *  - Works with ANY format the browser's native video/audio decoder supports
- *    (MP4/H.264+AAC, WebM/VP9+Opus, MKV, MOV, etc.)
+ *  - Works with ANY format the browser's native decoder supports (MP4, WebM, MKV, MOV…)
  *  - Streams from disk — no full-file RAM load → no OOM crash on 1-hour videos
- *  - Is entirely client-side, hardware-accelerated, no CDN dependencies
+ *  - Entirely client-side, hardware-accelerated, zero CDN dependencies
+ *  - Accepts a File/Blob OR a blob: URL string directly — no fetch() needed
  */
 
 const TARGET_SR = 16000; // Whisper requires 16 kHz mono
 
 /**
- * Extract audio from a File or Blob as a 16 kHz mono Float32Array.
- * @param {File|Blob} file
- * @param {Function} onProgress  (percent 0-100, statusText) => void
+ * Extract audio from a File, Blob, or blob: URL string as a 16 kHz mono Float32Array.
+ * @param {File|Blob|string} source  File, Blob, or blob: URL string
+ * @param {Function} onProgress     (percent 0-100, statusText) => void
  * @returns {Promise<Float32Array>}
  */
-export async function extractAudioWebCodecs(file, onProgress) {
+export function extractAudioWebCodecs(source, onProgress) {
   return new Promise((resolve, reject) => {
-    const blobUrl = URL.createObjectURL(file);
+    // Resolve the URL to use as video.src
+    let videoSrc;
+    let ownedBlobUrl = null; // track whether WE created the blob URL (must revoke)
 
-    // Hidden video element — browser handles all demuxing/decoding
+    if (typeof source === 'string') {
+      // Caller already has a URL (blob: or otherwise) — use it directly
+      videoSrc = source;
+    } else if (source instanceof Blob || source instanceof File) {
+      ownedBlobUrl = URL.createObjectURL(source);
+      videoSrc = ownedBlobUrl;
+    } else {
+      reject(new Error('extractAudioWebCodecs: sumber tidak valid (bukan File, Blob, atau URL).'));
+      return;
+    }
+
+    // Hidden video element — browser handles all demuxing/decoding natively
     const video = document.createElement('video');
-    video.style.display = 'none';
-    video.muted = false;       // must NOT be muted for media element source to work
+    video.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;';
+    video.muted = false;       // must NOT be muted for createMediaElementSource to work
     video.playbackRate = 16;   // fast-forward to reduce wall-clock capture time
-    video.crossOrigin = 'anonymous';
+    video.preload = 'auto';
     document.body.appendChild(video);
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SR });
-    const bufferSize = 4096;
-    const source = audioCtx.createMediaElementSource(video);
-
-    // ScriptProcessorNode captures decoded PCM frames
-    const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+    let audioCtx = null;
+    let source_node = null;
+    let processor = null;
     const pcmChunks = [];
     let totalSamples = 0;
-
-    processor.onaudioprocess = (e) => {
-      const inputData = e.inputBuffer.getChannelData(0);
-      const copy = new Float32Array(inputData.length);
-      copy.set(inputData);
-      pcmChunks.push(copy);
-      totalSamples += copy.length;
-    };
-
-    // Route: video → processor → destination (silent output)
-    source.connect(processor);
-    processor.connect(audioCtx.destination);
+    let cleaned = false;
 
     const cleanup = () => {
-      try { processor.disconnect(); } catch (_) {}
-      try { source.disconnect(); } catch (_) {}
-      try { audioCtx.close(); } catch (_) {}
+      if (cleaned) return;
+      cleaned = true;
+      try { if (processor) processor.disconnect(); } catch (_) {}
+      try { if (source_node) source_node.disconnect(); } catch (_) {}
+      try { if (audioCtx) audioCtx.close(); } catch (_) {}
       try { video.pause(); video.src = ''; } catch (_) {}
       try { document.body.removeChild(video); } catch (_) {}
-      URL.revokeObjectURL(blobUrl);
+      if (ownedBlobUrl) URL.revokeObjectURL(ownedBlobUrl);
     };
+
+    const fail = (msg) => { cleanup(); reject(new Error(msg)); };
 
     video.addEventListener('loadedmetadata', () => {
       const duration = video.duration;
-      if (!isFinite(duration) || duration === 0) {
-        cleanup();
-        reject(new Error('Tidak dapat membaca durasi video.'));
+      if (!isFinite(duration) || duration <= 0) {
+        fail('Tidak dapat membaca durasi video. Format mungkin tidak didukung.');
         return;
       }
+
+      try {
+        audioCtx   = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SR });
+        source_node = audioCtx.createMediaElementSource(video);
+        processor  = audioCtx.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          const input = e.inputBuffer.getChannelData(0);
+          const copy  = new Float32Array(input.length);
+          copy.set(input);
+          pcmChunks.push(copy);
+          totalSamples += copy.length;
+        };
+
+        // Route: video → processor → destination (no speakers — silent output)
+        source_node.connect(processor);
+        processor.connect(audioCtx.destination);
+      } catch (err) {
+        fail('Gagal membuat audio context: ' + err.message);
+        return;
+      }
+
       if (onProgress) onProgress(2, 'Memulai ekstraksi audio...');
 
-      // Resumed AudioContext if needed (browser autoplay policy)
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-
-      video.play().catch(err => {
-        cleanup();
-        reject(new Error('Gagal memainkan video untuk ekstraksi audio: ' + err.message));
+      // Resume audio context if browser policy suspended it
+      const resume = () => audioCtx && audioCtx.state === 'suspended' ? audioCtx.resume() : Promise.resolve();
+      resume().then(() => {
+        video.play().catch(err => fail('Gagal memainkan video: ' + err.message));
       });
     });
 
     video.addEventListener('timeupdate', () => {
-      if (!isFinite(video.duration) || video.duration === 0) return;
+      if (!isFinite(video.duration) || video.duration <= 0) return;
       const pct = Math.min(95, Math.round((video.currentTime / video.duration) * 93) + 2);
       if (onProgress) onProgress(pct, `Mengekstrak audio... ${pct}%`);
     });
 
-    video.addEventListener('ended', async () => {
-      try {
-        // Let the processor flush its last buffer
-        await new Promise(r => setTimeout(r, 300));
-        processor.disconnect();
-        source.disconnect();
-        await audioCtx.close();
+    video.addEventListener('ended', () => {
+      // Give the ScriptProcessorNode time to flush its last buffer
+      setTimeout(() => {
+        try {
+          if (processor) processor.disconnect();
+          if (source_node) source_node.disconnect();
+        } catch (_) {}
 
         if (totalSamples === 0) {
-          cleanup();
-          reject(new Error('Tidak ada data audio yang berhasil diekstrak.'));
+          fail('Tidak ada data audio yang berhasil diekstrak dari video ini.');
           return;
         }
 
         if (onProgress) onProgress(98, 'Menggabungkan data audio...');
 
-        // Merge all chunks into one Float32Array
+        // Merge all PCM chunks into one Float32Array
         const merged = new Float32Array(totalSamples);
         let offset = 0;
         for (const chunk of pcmChunks) {
@@ -113,24 +135,19 @@ export async function extractAudioWebCodecs(file, onProgress) {
           offset += chunk.length;
         }
 
-        // AudioContext was already created at TARGET_SR so no resampling needed
         if (onProgress) onProgress(100, 'Ekstraksi audio selesai.');
         cleanup();
         resolve(merged);
-      } catch (err) {
-        cleanup();
-        reject(err);
-      }
+      }, 500);
     });
 
-    video.addEventListener('error', (e) => {
-      cleanup();
+    video.addEventListener('error', () => {
       const code = video.error ? video.error.code : '?';
-      const msg  = video.error ? video.error.message : 'Unknown';
-      reject(new Error(`Video tidak dapat dimuat (MediaError ${code}): ${msg}. Format mungkin tidak didukung browser.`));
+      const msg  = video.error ? video.error.message : 'unknown';
+      fail(`Video tidak dapat dimuat (MediaError ${code}: ${msg}). Format video mungkin tidak didukung browser ini.`);
     });
 
-    video.src = blobUrl;
+    video.src = videoSrc;
     video.load();
   });
 }

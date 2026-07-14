@@ -10,7 +10,7 @@ import { Exporter }        from './engine/exporter.js?v=7';
 import { SubtitleManager } from './subtitle/subtitle.js?v=7';
 import { TimelineUI }      from './ui/timeline-ui.js?v=7';
 import { OverlayManager }  from './overlay/overlay.js?v=7';
-import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=8';
+import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=9';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -876,10 +876,11 @@ class KepKatApp {
           barEl.style.width = `${pct}%`;
           textEl.textContent = text;
         };
-        if (blobUrl) {
-          audioData = await this._extractAudio(blobUrl, progressCb);
-        } else if (file) {
+        // Prefer raw File object (most reliable) — fall back to blob URL if no file
+        if (file) {
           audioData = await this._extractAudio(file, progressCb);
+        } else if (blobUrl) {
+          audioData = await this._extractAudio(blobUrl, progressCb);
         } else {
           throw new Error('File sumber atau URL media tidak ditemukan.');
         }
@@ -922,18 +923,9 @@ class KepKatApp {
   }
 
   async _extractAudio(fileOrUrl, onProgress) {
-    // Resolve blob URL string → Blob object so extractor can create its own URL
-    let blob;
-    if (typeof fileOrUrl === 'string' && fileOrUrl.startsWith('blob:')) {
-      const response = await fetch(fileOrUrl);
-      blob = await response.blob();
-    } else if (fileOrUrl instanceof Blob || fileOrUrl instanceof File) {
-      blob = fileOrUrl;
-    } else {
-      throw new Error('Sumber media tidak valid untuk ekstraksi audio.');
-    }
-    // Streaming client-side extraction using MediaElement + Web Audio API
-    return await extractAudioWebCodecs(blob, onProgress);
+    // Pass the source directly — extractAudioWebCodecs accepts File, Blob, or blob: URL string
+    // Prefer the raw File object when available (most reliable, no fetch needed)
+    return await extractAudioWebCodecs(fileOrUrl, onProgress);
   }
 
   async _extractAudioLegacy(fileOrUrl) {
