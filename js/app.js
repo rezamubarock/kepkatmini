@@ -398,7 +398,7 @@ class KepKatApp {
       let audioData = null;
       if (type === 'video' || type === 'audio') {
         try {
-          audioData = await this._extractAudio(safeFile);
+          audioData = await this._extractAudio(url);
         } catch (err) {
           console.warn('Gagal ekstrak audio langsung saat import:', err);
         }
@@ -870,10 +870,10 @@ class KepKatApp {
     try {
       if (!audioData) {
         textEl.textContent = 'Mengekstrak audio dari video...';
-        if (file) {
-          audioData = await this._extractAudio(file);
-        } else if (blobUrl) {
+        if (blobUrl) {
           audioData = await this._extractAudio(blobUrl);
+        } else if (file) {
+          audioData = await this._extractAudio(file);
         } else {
           throw new Error('File sumber atau URL media tidak ditemukan.');
         }
@@ -884,9 +884,8 @@ class KepKatApp {
       textEl.textContent = 'Memuat model AI Whisper...';
       barEl.style.width  = '5%';
 
-      // Terminate previous worker
       if (this._whisperWorker) this._whisperWorker.terminate();
-      this._whisperWorker = new Worker('./js/subtitle/whisper-worker.js', { type: 'module' });
+      this._whisperWorker = new Worker('./js/subtitle/whisper-worker.js');
 
       this._whisperWorker.onmessage = (e) => {
         const { type, value, text, segments, message } = e.data;

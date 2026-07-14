@@ -10,12 +10,23 @@
  *  ← { type: 'error', message: string }
  */
 
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1/dist/transformers.min.js';
+let pipeline, env;
 
-// Configure transformers.js
-env.allowLocalModels = false;
-env.useBrowserCache = true;
-env.backends.onnx.wasm.proxy = false;
+try {
+  importScripts('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1/dist/transformers.min.js');
+  if (!self.transformers) {
+    throw new Error('self.transformers is undefined after importScripts');
+  }
+  ({ pipeline, env } = self.transformers);
+
+  // Configure transformers.js
+  env.allowLocalModels = false;
+  env.useBrowserCache = true;
+  env.backends.onnx.wasm.proxy = false;
+} catch (e) {
+  console.error('[WhisperWorker] Init Error:', e);
+  self.postMessage({ type: 'error', message: 'Worker init error: ' + e.message });
+}
 
 let transcriber = null;
 
