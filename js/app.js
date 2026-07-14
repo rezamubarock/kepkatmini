@@ -3,13 +3,13 @@
  * Wires all engines together: renderer, timeline, visualizer, subtitles, overlays, exporter
  */
 
-import { Renderer }        from './engine/renderer.js?v=5';
-import { Timeline }        from './engine/timeline.js?v=5';
-import { Visualizer }      from './engine/visualizer.js?v=5';
-import { Exporter }        from './engine/exporter.js?v=5';
-import { SubtitleManager } from './subtitle/subtitle.js?v=5';
-import { TimelineUI }      from './ui/timeline-ui.js?v=5';
-import { OverlayManager }  from './overlay/overlay.js?v=5';
+import { Renderer }        from './engine/renderer.js?v=6';
+import { Timeline }        from './engine/timeline.js?v=6';
+import { Visualizer }      from './engine/visualizer.js?v=6';
+import { Exporter }        from './engine/exporter.js?v=6';
+import { SubtitleManager } from './subtitle/subtitle.js?v=6';
+import { TimelineUI }      from './ui/timeline-ui.js?v=6';
+import { OverlayManager }  from './overlay/overlay.js?v=6';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -911,7 +911,13 @@ class KepKatApp {
       this._whisperWorker.postMessage({ type: 'transcribe', audioData, lang: 'auto' });
     } catch (err) {
       console.error(err);
-      toast(`Gagal ekstrak audio: [${err.name}] ${err.message}`, 'error');
+      let errMsg = err.message || "";
+      if (err.name === 'NotReadableError') {
+        errMsg = "File sedang dikunci oleh program lain (seperti VIZPRO) atau ukuran terlalu besar. Silakan tutup VIZPRO, salin file video ke folder lain (seperti Desktop), atau gunakan video yang lebih kecil.";
+      } else {
+        errMsg = `[${err.name}] ${err.message}`;
+      }
+      toast(`Gagal ekstrak audio: ${errMsg}`, 'error');
       statusDiv.classList.add('hidden');
     }
   }
