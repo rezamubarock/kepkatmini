@@ -27,7 +27,6 @@ export class TimelineUI {
       this._rulerCtx = this._rulerEl.getContext('2d');
     }
 
-    this._bind();
     this._setupDropZone();
 
     // Listen to timeline changes
