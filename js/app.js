@@ -3,13 +3,13 @@
  * Wires all engines together: renderer, timeline, visualizer, subtitles, overlays, exporter
  */
 
-import { Renderer }        from './engine/renderer.js?v=3';
-import { Timeline }        from './engine/timeline.js?v=3';
-import { Visualizer }      from './engine/visualizer.js?v=3';
-import { Exporter }        from './engine/exporter.js?v=3';
-import { SubtitleManager } from './subtitle/subtitle.js?v=3';
-import { TimelineUI }      from './ui/timeline-ui.js?v=3';
-import { OverlayManager }  from './overlay/overlay.js?v=3';
+import { Renderer }        from './engine/renderer.js?v=4';
+import { Timeline }        from './engine/timeline.js?v=4';
+import { Visualizer }      from './engine/visualizer.js?v=4';
+import { Exporter }        from './engine/exporter.js?v=4';
+import { SubtitleManager } from './subtitle/subtitle.js?v=4';
+import { TimelineUI }      from './ui/timeline-ui.js?v=4';
+import { OverlayManager }  from './overlay/overlay.js?v=4';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -908,12 +908,7 @@ class KepKatApp {
       this._whisperWorker.postMessage({ type: 'transcribe', audioData, lang: 'auto' });
     } catch (err) {
       console.error(err);
-      let errMsg = err.message || "";
-      const lower = errMsg.toLowerCase();
-      if (lower.includes('decode') || lower.includes('read') || lower.includes('permission') || lower.includes('format')) {
-        errMsg = "Ukuran file terlalu besar atau format audio video tidak didukung. Silakan gunakan video yang lebih pendek (di bawah 10 menit) atau kecil.";
-      }
-      toast(`Gagal ekstrak audio: ${errMsg}`, 'error');
+      toast(`Gagal ekstrak audio: [${err.name}] ${err.message}`, 'error');
       statusDiv.classList.add('hidden');
     }
   }
