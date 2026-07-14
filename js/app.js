@@ -162,6 +162,7 @@ class KepKatApp {
     dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop',      (e) => {
       e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.remove('drag-over');
       this._handleFiles(e.dataTransfer.files);
     });
@@ -250,7 +251,19 @@ class KepKatApp {
       this.visualizer.setEnabled(e.target.checked);
       if (e.target.checked) {
         this.visualizer.resume();
-        toast('Visualizer diaktifkan', 'info');
+        // Add visualizer overlay if not already present
+        if (!this.overlayMgr.overlays.some(o => o.id === 'viz_overlay')) {
+          this.overlayMgr.addOverlay(null, {
+            id: 'viz_overlay',
+            type: 'visualizer',
+            x: 480, y: 700,
+            width: 960, height: 200,
+            rotation: 0
+          });
+        }
+        toast('Visualizer diaktifkan (bisa digeser/diskala di player)', 'info');
+      } else {
+        this.overlayMgr.removeOverlay('viz_overlay');
       }
     });
     document.querySelectorAll('.viz-type-btn').forEach(btn => {
@@ -260,7 +273,7 @@ class KepKatApp {
         this.visualizer.setMode(btn.dataset.viz);
       });
     });
-    const vizSettings = ['viz-color1','viz-color2','viz-sensitivity','viz-size','viz-x','viz-y'];
+    const vizSettings = ['viz-color1','viz-color2','viz-sensitivity'];
     vizSettings.forEach(id => {
       document.getElementById(id).addEventListener('input', () => this._updateVisualizerSettings());
     });
@@ -515,6 +528,7 @@ class KepKatApp {
     }
 
     const clip = this.timeline.addClip(trackId, {
+      file: media.file,
       type: media.type,
       name: media.name,
       start: startTime,
@@ -588,19 +602,29 @@ class KepKatApp {
     // Active overlays
     const overlays = this.overlayMgr.getActiveOverlays(t);
 
-    // Visualizer
-    let vizCanvas = null;
-    let vizCtx = null;
+    // Visualizer rendering inside overlay
     if (this.visualizer.enabled) {
-      if (!this._vizCanvas) {
-        this._vizCanvas = document.createElement('canvas');
-        this._vizCanvas.width  = this.canvas.width;
-        this._vizCanvas.height = this.canvas.height;
-        this._vizCtx = this._vizCanvas.getContext('2d');
+      const vizOverlay = overlays.find(o => o.id === 'viz_overlay');
+      if (vizOverlay) {
+        if (!this._vizCanvas) {
+          this._vizCanvas = document.createElement('canvas');
+          this._vizCtx = this._vizCanvas.getContext('2d');
+        }
+        const ovW = Math.max(64, Math.round(vizOverlay.width));
+        const ovH = Math.max(32, Math.round(vizOverlay.height));
+        if (this._vizCanvas.width !== ovW || this._vizCanvas.height !== ovH) {
+          this._vizCanvas.width  = ovW;
+          this._vizCanvas.height = ovH;
+        }
+        this._vizCtx.clearRect(0, 0, ovW, ovH);
+        this.visualizer.draw(this._vizCtx, ovW, ovH, t);
+
+        if (gl) {
+          vizOverlay.texture = this.renderer.uploadTexture(vizOverlay.id, this._vizCanvas);
+        } else {
+          vizOverlay.imageElement = this._vizCanvas;
+        }
       }
-      this._vizCtx.clearRect(0, 0, this._vizCanvas.width, this._vizCanvas.height);
-      this.visualizer.draw(this._vizCtx, this._vizCanvas.width, this._vizCanvas.height, t);
-      vizCanvas = this._vizCanvas;
     }
 
     // Render everything
@@ -611,29 +635,6 @@ class KepKatApp {
       subtitleStyle,
       time: t,
     });
-
-    // Overlay visualizer canvas on top (via 2D ctx on top of WebGL)
-    if (vizCanvas && this.renderer.ctx2d) {
-      this.renderer.ctx2d.drawImage(vizCanvas, 0, 0);
-    } else if (vizCanvas && this.renderer.gl) {
-      // Upload viz canvas as texture and draw
-      const vizTex = this.renderer.uploadTexture('__viz', vizCanvas);
-      // Draw full-screen overlay
-      const gl = this.renderer.gl;
-      const prog = this.renderer.programs.base;
-      gl.useProgram(prog);
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.renderer._quad.buf);
-      this.renderer._quad.enableAttribs(prog);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, vizTex);
-      const uTex = gl.getUniformLocation(prog, 'u_texture');
-      if (uTex) gl.uniform1i(uTex, 0);
-      const uTransform = gl.getUniformLocation(prog, 'u_transform');
-      if (uTransform) gl.uniformMatrix3fv(uTransform, false, [1,0,0, 0,1,0, 0,0,1]);
-      const uOpacity = gl.getUniformLocation(prog, 'u_opacity');
-      if (uOpacity) gl.uniform1f(uOpacity, 1.0);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    }
 
     // Sync overlay handles to canvas resize
     this.overlayMgr.syncAllHandles();
@@ -843,12 +844,15 @@ class KepKatApp {
     const textEl    = document.getElementById('whisper-text');
     statusDiv.classList.remove('hidden');
 
-    // Extract audio from video
+    // Extract audio from video file
     const clip = clips[0];
-    const vid   = clip.videoElement;
+    const file = clip.file;
 
     try {
-      const audioData = await this._extractAudio(vid);
+      if (!file) {
+        throw new Error('File sumber klip video tidak ditemukan.');
+      }
+      const audioData = await this._extractAudio(file);
       textEl.textContent = 'Memuat model AI Whisper...';
       barEl.style.width  = '5%';
 
@@ -884,10 +888,9 @@ class KepKatApp {
     }
   }
 
-  async _extractAudio(videoElement) {
+  async _extractAudio(file) {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    const response = await fetch(videoElement.src);
-    const arrayBuf = await response.arrayBuffer();
+    const arrayBuf = await file.arrayBuffer();
     const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
     const channelData = audioBuf.getChannelData(0);
     await audioCtx.close();
@@ -976,9 +979,6 @@ class KepKatApp {
       color1:      document.getElementById('viz-color1').value,
       color2:      document.getElementById('viz-color2').value,
       sensitivity: parseInt(document.getElementById('viz-sensitivity').value),
-      size:        parseInt(document.getElementById('viz-size').value),
-      x:           parseInt(document.getElementById('viz-x').value),
-      y:           parseInt(document.getElementById('viz-y').value),
     });
   }
 

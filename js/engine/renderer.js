@@ -231,7 +231,8 @@ export class Renderer {
     // Set transform (position, scale, rotation, opacity)
     const uTransform = gl.getUniformLocation(prog, 'u_transform');
     if (uTransform) {
-      const mat = this._buildMatrix(clip.x||0, clip.y||0, clip.scale||1, clip.rotation||0);
+      const scaleVal = (clip.scale ?? 100) / 100;
+      const mat = this._buildMatrix(clip.x||0, clip.y||0, scaleVal, clip.rotation||0);
       gl.uniformMatrix3fv(uTransform, false, mat);
     }
     const uOpacity = gl.getUniformLocation(prog, 'u_opacity');
@@ -293,6 +294,11 @@ export class Renderer {
     const uTime = gl.getUniformLocation(prog, 'u_time');
     if (uTime) gl.uniform1f(uTime, time);
 
+    const uTransform = gl.getUniformLocation(prog, 'u_transform');
+    if (uTransform) {
+      gl.uniformMatrix3fv(uTransform, false, [1,0,0, 0,1,0, 0,0,1]);
+    }
+
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -311,9 +317,9 @@ export class Renderer {
 
     const uTransform = gl.getUniformLocation(prog, 'u_transform');
     if (uTransform) {
-      // Convert overlay position (0-1 space) to NDC
-      const x = (overlay.x / this.canvas.width) * 2 - 1;
-      const y = 1 - (overlay.y / this.canvas.height) * 2;
+      // Convert overlay center position to NDC
+      const x = ((overlay.x + overlay.width / 2) / this.canvas.width) * 2 - 1;
+      const y = 1 - ((overlay.y + overlay.height / 2) / this.canvas.height) * 2;
       const sx = (overlay.width / this.canvas.width);
       const sy = (overlay.height / this.canvas.height);
       const mat = this._buildMatrix(x, y, 1, overlay.rotation || 0, sx, sy);
@@ -437,6 +443,21 @@ export class Renderer {
         ctx.globalAlpha = clip.opacity !== undefined ? clip.opacity : 1;
         ctx.drawImage(clip.imageElement, 0, 0, w, h);
         ctx.globalAlpha = 1;
+      }
+    }
+
+    // Draw overlays (including visualizer)
+    for (const overlay of state.overlays || []) {
+      const source = overlay.imageElement || overlay.texture;
+      if (source) {
+        ctx.save();
+        ctx.globalAlpha = overlay.opacity !== undefined ? overlay.opacity : 1;
+        // Translate to overlay center
+        ctx.translate(overlay.x + overlay.width / 2, overlay.y + overlay.height / 2);
+        ctx.rotate(overlay.rotation || 0);
+        // Draw centered
+        ctx.drawImage(source, -overlay.width / 2, -overlay.height / 2, overlay.width, overlay.height);
+        ctx.restore();
       }
     }
 

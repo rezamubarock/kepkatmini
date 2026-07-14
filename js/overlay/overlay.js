@@ -21,7 +21,7 @@ export class OverlayManager {
     const defaultSize = Math.min(cw, ch) * 0.15;
 
     const overlay = {
-      id: `ov_${this._nextId++}`,
+      id: options.id || `ov_${this._nextId++}`,
       src: source,
       type: options.type || 'image',
       x: options.x ?? (cw / 2 - defaultSize / 2),
@@ -78,7 +78,12 @@ export class OverlayManager {
     el.dataset.id = overlay.id;
 
     // Content
-    if (overlay.emoji) {
+    if (overlay.id === 'viz_overlay') {
+      el.innerHTML = `<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(168,85,247,0.1);border:1px dashed var(--purple);border-radius:var(--radius-sm);color:white;font-weight:600;font-size:11px;pointer-events:none;gap:4px">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Visualizer Area</span>
+      </div>`;
+    } else if (overlay.emoji) {
       el.innerHTML = `<span style="font-size:60px;line-height:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">${overlay.emoji}</span>`;
     } else if (overlay.type === 'svg' && overlay.src.startsWith('<svg')) {
       el.innerHTML = overlay.src;

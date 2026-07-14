@@ -106,187 +106,162 @@ export class Visualizer {
     if (!data) return;
 
     const s = this.settings;
-    const cx = (s.x / 100) * canvasW;
-    const cy = (s.y / 100) * canvasH;
-    const sz = (s.size / 100) * Math.min(canvasW, canvasH);
     const sens = s.sensitivity;
 
     targetCtx.save();
+    
     switch (this.mode) {
-      case 'bars':     this._drawBars(targetCtx, data, cx, cy, sz, sens, canvasW, canvasH); break;
-      case 'wave':     this._drawWave(targetCtx, data, cx, cy, sz, sens, canvasW, canvasH); break;
-      case 'circle':   this._drawCircle(targetCtx, data, cx, cy, sz, sens); break;
-      case 'spectrum': this._drawSpectrum(targetCtx, data, cx, cy, sz, sens, canvasW, canvasH); break;
-      case 'particle': this._drawParticle(targetCtx, data, cx, cy, sz, sens, canvasW, canvasH, time); break;
+      case 'bars': {
+        const count = Math.min(data.length, 64);
+        const barW = canvasW / count;
+        const maxH = canvasH * 0.9;
+        
+        targetCtx.shadowBlur = 8;
+        targetCtx.shadowColor = this.settings.color1;
+        
+        for (let i = 0; i < count; i++) {
+          const val = (data[i] / 255) * sens * 0.5;
+          const h = Math.max(2, val * maxH);
+          const x = i * barW;
+          const y = canvasH - h;
+          const grad = targetCtx.createLinearGradient(x, y, x, canvasH);
+          grad.addColorStop(0, this.settings.color1);
+          grad.addColorStop(1, this.settings.color2 + '44');
+          targetCtx.fillStyle = grad;
+          targetCtx.beginPath();
+          if (targetCtx.roundRect) {
+            targetCtx.roundRect(x + 1, y, barW - 2, h, [2, 2, 0, 0]);
+          } else {
+            targetCtx.rect(x + 1, y, barW - 2, h);
+          }
+          targetCtx.fill();
+        }
+        break;
+      }
+      case 'wave': {
+        const count = data.length;
+        const stepX = canvasW / count;
+        
+        targetCtx.beginPath();
+        targetCtx.lineWidth = 3;
+        targetCtx.strokeStyle = this._gradient(targetCtx, 0, 0, canvasW, 0);
+        targetCtx.shadowBlur = 10;
+        targetCtx.shadowColor = this.settings.color1;
+        
+        for (let i = 0; i < count; i++) {
+          const val = (data[i] / 128 - 1) * canvasH * 0.4 * sens * 0.2;
+          const x = i * stepX;
+          const y = canvasH / 2 + val;
+          i === 0 ? targetCtx.moveTo(x, y) : targetCtx.lineTo(x, y);
+        }
+        targetCtx.stroke();
+        break;
+      }
+      case 'circle': {
+        const count = Math.min(data.length, 128);
+        const cx = canvasW / 2;
+        const cy = canvasH / 2;
+        const baseR = Math.min(canvasW, canvasH) * 0.2;
+        const maxDelta = Math.min(canvasW, canvasH) * 0.25;
+        const angleStep = (Math.PI * 2) / count;
+        
+        targetCtx.beginPath();
+        targetCtx.lineWidth = 2;
+        targetCtx.strokeStyle = this._gradient(targetCtx, cx - baseR * 2, cy, cx + baseR * 2, cy);
+        targetCtx.shadowBlur = 12;
+        targetCtx.shadowColor = this.settings.color1;
+        
+        for (let i = 0; i <= count; i++) {
+          const idx = i % count;
+          const val = (data[idx] / 255) * maxDelta * sens * 0.3;
+          const r = baseR + val;
+          const angle = angleStep * i - Math.PI / 2;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          i === 0 ? targetCtx.moveTo(x, y) : targetCtx.lineTo(x, y);
+        }
+        targetCtx.closePath();
+        targetCtx.stroke();
+        
+        // Inner fill
+        const rg = this._radialGradient(targetCtx, cx, cy, baseR);
+        targetCtx.beginPath();
+        targetCtx.arc(cx, cy, baseR, 0, Math.PI * 2);
+        targetCtx.fillStyle = rg;
+        targetCtx.globalAlpha = 0.15;
+        targetCtx.fill();
+        targetCtx.globalAlpha = 1;
+        break;
+      }
+      case 'spectrum': {
+        const count = Math.min(data.length, 64);
+        const stepX = canvasW / count;
+        const maxH = canvasH * 0.9;
+        
+        targetCtx.beginPath();
+        targetCtx.moveTo(0, canvasH);
+        for (let i = 0; i < count; i++) {
+          const val = (data[i] / 255) * maxH * sens * 0.4;
+          const x = i * stepX;
+          targetCtx.lineTo(x, canvasH - val);
+        }
+        targetCtx.lineTo(canvasW, canvasH);
+        targetCtx.closePath();
+        
+        const grad = targetCtx.createLinearGradient(0, canvasH - maxH, 0, canvasH);
+        grad.addColorStop(0, this.settings.color1 + 'cc');
+        grad.addColorStop(0.7, this.settings.color2 + '66');
+        grad.addColorStop(1, this.settings.color2 + '00');
+        targetCtx.fillStyle = grad;
+        targetCtx.shadowBlur = 15;
+        targetCtx.shadowColor = this.settings.color1;
+        targetCtx.fill();
+        break;
+      }
+      case 'particle': {
+        const cx = canvasW / 2;
+        const cy = canvasH / 2;
+        const sz = Math.min(canvasW, canvasH);
+        // Emit new particles based on audio energy
+        const energy = data.reduce((a, v) => a + v, 0) / data.length / 255;
+        const count = Math.floor(energy * sens * 3);
+        
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = energy * sz * 0.05 * sens;
+          this._particles.push({
+            x: cx, y: cy,
+            vx: Math.cos(angle) * speed * (0.5 + Math.random()),
+            vy: Math.sin(angle) * speed * (0.5 + Math.random()) - sz * 0.01,
+            size: 2 + Math.random() * 4,
+            life: 1.0,
+            decay: 0.02 + Math.random() * 0.03,
+            color: Math.random() < 0.5 ? this.settings.color1 : this.settings.color2,
+          });
+        }
+        
+        // Update & draw particles
+        this._particles = this._particles.filter(p => p.life > 0);
+        for (const p of this._particles) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.1; // gravity
+          p.life -= p.decay;
+          
+          targetCtx.beginPath();
+          targetCtx.globalAlpha = p.life;
+          targetCtx.fillStyle = p.color;
+          targetCtx.shadowBlur = 8;
+          targetCtx.shadowColor = p.color;
+          targetCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+          targetCtx.fill();
+        }
+        targetCtx.globalAlpha = 1;
+        break;
+      }
     }
+    
     targetCtx.restore();
-  }
-
-  _gradient(ctx, x1, y1, x2, y2) {
-    const g = ctx.createLinearGradient(x1, y1, x2, y2);
-    g.addColorStop(0, this.settings.color1);
-    g.addColorStop(1, this.settings.color2);
-    return g;
-  }
-
-  _radialGradient(ctx, cx, cy, r) {
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    g.addColorStop(0, this.settings.color1);
-    g.addColorStop(1, this.settings.color2);
-    return g;
-  }
-
-  _drawBars(ctx, data, cx, cy, sz, sens, cw, ch) {
-    const count = Math.min(data.length, 64);
-    const barW = sz / count;
-    const maxH = sz * 1.5;
-    const startX = cx - sz / 2;
-
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = this.settings.color1;
-
-    for (let i = 0; i < count; i++) {
-      const val = (data[i] / 255) * sens * 0.5;
-      const h = Math.max(2, val * maxH);
-      const x = startX + i * barW;
-      const y = cy - h;
-      const grad = ctx.createLinearGradient(x, y, x, cy);
-      grad.addColorStop(0, this.settings.color1);
-      grad.addColorStop(1, this.settings.color2 + '44');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x + 1, y, barW - 2, h, [2, 2, 0, 0])
-                    : ctx.rect(x + 1, y, barW - 2, h);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-  }
-
-  _drawWave(ctx, data, cx, cy, sz, sens, cw, ch) {
-    const count = data.length;
-    const startX = cx - sz / 2;
-    const stepX = sz / count;
-
-    ctx.beginPath();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = this._gradient(ctx, startX, 0, startX + sz, 0);
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = this.settings.color1;
-
-    for (let i = 0; i < count; i++) {
-      const val = (data[i] / 128 - 1) * sz * 0.3 * sens * 0.3;
-      const x = startX + i * stepX;
-      const y = cy + val;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
-  _drawCircle(ctx, data, cx, cy, sz, sens) {
-    const count = Math.min(data.length, 128);
-    const baseR = sz * 0.4;
-    const maxDelta = sz * 0.4;
-    const angleStep = (Math.PI * 2) / count;
-
-    ctx.beginPath();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = this._gradient(ctx, cx - sz, cy, cx + sz, cy);
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = this.settings.color1;
-
-    for (let i = 0; i <= count; i++) {
-      const idx = i % count;
-      const val = (data[idx] / 255) * maxDelta * sens * 0.3;
-      const r = baseR + val;
-      const angle = angleStep * i - Math.PI / 2;
-      const x = cx + r * Math.cos(angle);
-      const y = cy + r * Math.sin(angle);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
-    // Inner fill
-    const rg = this._radialGradient(ctx, cx, cy, baseR);
-    ctx.beginPath();
-    ctx.arc(cx, cy, baseR, 0, Math.PI * 2);
-    ctx.fillStyle = rg;
-    ctx.globalAlpha = 0.15;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
-  }
-
-  _drawSpectrum(ctx, data, cx, cy, sz, sens, cw, ch) {
-    const count = Math.min(data.length, 64);
-    const startX = cx - sz / 2;
-    const stepX = sz / count;
-    const maxH = sz;
-
-    ctx.beginPath();
-    ctx.moveTo(startX, cy);
-    for (let i = 0; i < count; i++) {
-      const val = (data[i] / 255) * maxH * sens * 0.4;
-      const x = startX + i * stepX;
-      ctx.lineTo(x, cy - val);
-    }
-    ctx.lineTo(startX + sz, cy);
-    ctx.closePath();
-
-    const grad = ctx.createLinearGradient(startX, cy - maxH, startX, cy);
-    grad.addColorStop(0, this.settings.color1 + 'cc');
-    grad.addColorStop(0.7, this.settings.color2 + '66');
-    grad.addColorStop(1, this.settings.color2 + '00');
-    ctx.fillStyle = grad;
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = this.settings.color1;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  }
-
-  _drawParticle(ctx, data, cx, cy, sz, sens, cw, ch, time) {
-    // Emit new particles based on audio energy
-    const energy = data.reduce((a, v) => a + v, 0) / data.length / 255;
-    const count = Math.floor(energy * sens * 3);
-
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = energy * sz * 0.05 * sens;
-      this._particles.push({
-        x: cx, y: cy,
-        vx: Math.cos(angle) * speed * (0.5 + Math.random()),
-        vy: Math.sin(angle) * speed * (0.5 + Math.random()) - sz * 0.01,
-        size: 2 + Math.random() * 4,
-        life: 1.0,
-        decay: 0.02 + Math.random() * 0.03,
-        color: Math.random() < 0.5 ? this.settings.color1 : this.settings.color2,
-      });
-    }
-
-    // Update & draw particles
-    this._particles = this._particles.filter(p => p.life > 0);
-    for (const p of this._particles) {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.1; // gravity
-      p.life -= p.decay;
-
-      ctx.beginPath();
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = p.color;
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
-
-    // Keep particle count manageable
-    if (this._particles.length > 500) {
-      this._particles = this._particles.slice(-500);
-    }
   }
 
   destroy() {
