@@ -10,7 +10,7 @@ import { Exporter }        from './engine/exporter.js?v=7';
 import { SubtitleManager } from './subtitle/subtitle.js?v=7';
 import { TimelineUI }      from './ui/timeline-ui.js?v=7';
 import { OverlayManager }  from './overlay/overlay.js?v=7';
-import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=7';
+import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=8';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -915,45 +915,25 @@ class KepKatApp {
 
       this._whisperWorker.postMessage({ type: 'transcribe', audioData, lang: 'auto' });
     } catch (err) {
-      console.error(err);
-      let errMsg = err.message || "";
-      if (err.name === 'NotReadableError' || err.name === 'RangeError' || err.message?.toLowerCase().includes('decode') || fileSizeMB > 50) {
-        errMsg = `Gagal mengekstrak audio: file terlalu besar atau codec tidak didukung.\n\nJika menggunakan format video non-standar, silakan coba konversi ke MP3/WAV terlebih dahulu.`;
-      } else {
-        errMsg = `[${err.name}] ${err.message}`;
-      }
-      toast(`Gagal ekstrak audio: ${errMsg}`, 'error');
+      console.error('[AutoSubtitle] Error:', err);
+      toast(`Auto subtitle gagal: ${err.message}`, 'error');
       statusDiv.classList.add('hidden');
     }
   }
 
   async _extractAudio(fileOrUrl, onProgress) {
-    // 1. Convert to Blob if it's a blob url string
+    // Resolve blob URL string → Blob object so extractor can create its own URL
     let blob;
-    if (typeof fileOrUrl === 'string') {
-      if (fileOrUrl.startsWith('blob:')) {
-        try {
-          const response = await fetch(fileOrUrl);
-          blob = await response.blob();
-        } catch (e) {
-          console.warn("Failed to fetch Blob URL, falling back to legacy:", e);
-          return this._extractAudioLegacy(fileOrUrl);
-        }
-      } else {
-        // External URLs must use legacy fetch
-        return this._extractAudioLegacy(fileOrUrl);
-      }
-    } else {
+    if (typeof fileOrUrl === 'string' && fileOrUrl.startsWith('blob:')) {
+      const response = await fetch(fileOrUrl);
+      blob = await response.blob();
+    } else if (fileOrUrl instanceof Blob || fileOrUrl instanceof File) {
       blob = fileOrUrl;
+    } else {
+      throw new Error('Sumber media tidak valid untuk ekstraksi audio.');
     }
-
-    // 2. Try hardware-accelerated WebCodecs + MP4Box streaming extraction
-    try {
-      return await extractAudioWebCodecs(blob, onProgress);
-    } catch (err) {
-      console.warn("WebCodecs audio extraction failed, falling back to legacy AudioContext decoding:", err);
-      return this._extractAudioLegacy(fileOrUrl);
-    }
+    // Streaming client-side extraction using MediaElement + Web Audio API
+    return await extractAudioWebCodecs(blob, onProgress);
   }
 
   async _extractAudioLegacy(fileOrUrl) {
