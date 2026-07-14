@@ -3,13 +3,13 @@
  * Wires all engines together: renderer, timeline, visualizer, subtitles, overlays, exporter
  */
 
-import { Renderer }        from './engine/renderer.js?v=4';
-import { Timeline }        from './engine/timeline.js?v=4';
-import { Visualizer }      from './engine/visualizer.js?v=4';
-import { Exporter }        from './engine/exporter.js?v=4';
-import { SubtitleManager } from './subtitle/subtitle.js?v=4';
-import { TimelineUI }      from './ui/timeline-ui.js?v=4';
-import { OverlayManager }  from './overlay/overlay.js?v=4';
+import { Renderer }        from './engine/renderer.js?v=5';
+import { Timeline }        from './engine/timeline.js?v=5';
+import { Visualizer }      from './engine/visualizer.js?v=5';
+import { Exporter }        from './engine/exporter.js?v=5';
+import { SubtitleManager } from './subtitle/subtitle.js?v=5';
+import { TimelineUI }      from './ui/timeline-ui.js?v=5';
+import { OverlayManager }  from './overlay/overlay.js?v=5';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -388,14 +388,17 @@ class KepKatApp {
                  : null;
       if (!type) { toast(`Format tidak didukung: ${file.name}`, 'error'); continue; }
 
-      const id  = `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      const url = URL.createObjectURL(file);
+      // Clone file immediately to create a browser-backed Blob reference that bypasses OS locks / NotReadableError
+      const safeFile = new File([file], file.name, { type: file.type });
 
-      // Extract audio data immediately using the File object (never blocked by CORS or COEP)
+      const id  = `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const url = URL.createObjectURL(safeFile);
+
+      // Extract audio data immediately using the safe cloned File object
       let audioData = null;
       if (type === 'video' || type === 'audio') {
         try {
-          audioData = await this._extractAudio(file);
+          audioData = await this._extractAudio(safeFile);
         } catch (err) {
           console.warn('Gagal ekstrak audio langsung saat import:', err);
         }
@@ -414,7 +417,7 @@ class KepKatApp {
         thumbnailUrl = url;
       }
 
-      mediaStore.set(id, { id, file, url, type, duration, name: file.name, thumbnailUrl, audioData });
+      mediaStore.set(id, { id, file: safeFile, url, type, duration, name: safeFile.name, thumbnailUrl, audioData });
       this._renderMediaItem(id);
 
       // Auto-add to first available track
