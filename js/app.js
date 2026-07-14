@@ -388,22 +388,18 @@ class KepKatApp {
                  : null;
       if (!type) { toast(`Format tidak didukung: ${file.name}`, 'error'); continue; }
 
-      // Extract audio data immediately in the first event loop tick to ensure permission
+      const id  = `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const url = URL.createObjectURL(file);
+
+      // Extract audio data immediately using the stable Object URL (never expires or throws permission issues)
       let audioData = null;
       if (type === 'video' || type === 'audio') {
         try {
-          const arrayBuf = await file.arrayBuffer();
-          const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-          const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
-          audioData = audioBuf.getChannelData(0);
-          await audioCtx.close();
+          audioData = await this._extractAudio(url);
         } catch (err) {
           console.warn('Gagal ekstrak audio langsung saat import:', err);
         }
       }
-
-      const id  = `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      const url = URL.createObjectURL(file);
 
       let duration = 5;
       let thumbnailUrl = null;
@@ -545,6 +541,7 @@ class KepKatApp {
 
     const clip = this.timeline.addClip(trackId, {
       file: media.file,
+      mediaUrl: media.url,
       audioData,
       type: media.type,
       name: media.name,
@@ -864,14 +861,18 @@ class KepKatApp {
     // Use pre-extracted audio data if available, or extract it now
     const clip = clips[0];
     let audioData = clip.audioData;
-    const file = clip.file;
+    const blobUrl = clip.mediaUrl;
 
     try {
       if (!audioData) {
-        if (!file) {
-          throw new Error('Data audio belum diekstrak dan file sumber tidak ditemukan.');
+        if (!blobUrl) {
+          throw new Error('URL media tidak ditemukan.');
         }
-        audioData = await this._extractAudio(file);
+        textEl.textContent = 'Mengekstrak audio dari video...';
+        audioData = await this._extractAudio(blobUrl);
+      }
+      if (!audioData || audioData.length === 0) {
+        throw new Error('Ekstraksi audio menghasilkan data kosong.');
       }
       textEl.textContent = 'Memuat model AI Whisper...';
       barEl.style.width  = '5%';
@@ -903,14 +904,20 @@ class KepKatApp {
       this._whisperWorker.postMessage({ type: 'transcribe', audioData, lang: 'auto' });
     } catch (err) {
       console.error(err);
-      toast(`Gagal ekstrak audio: ${err.message}`, 'error');
+      let errMsg = err.message || "";
+      const lower = errMsg.toLowerCase();
+      if (lower.includes('decode') || lower.includes('read') || lower.includes('permission') || lower.includes('format')) {
+        errMsg = "Ukuran file terlalu besar atau format audio video tidak didukung. Silakan gunakan video yang lebih pendek (di bawah 10 menit) atau kecil.";
+      }
+      toast(`Gagal ekstrak audio: ${errMsg}`, 'error');
       statusDiv.classList.add('hidden');
     }
   }
 
-  async _extractAudio(file) {
+  async _extractAudio(blobUrl) {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    const arrayBuf = await file.arrayBuffer();
+    const response = await fetch(blobUrl);
+    const arrayBuf = await response.arrayBuffer();
     const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
     const channelData = audioBuf.getChannelData(0);
     await audioCtx.close();
