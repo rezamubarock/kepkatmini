@@ -59,6 +59,8 @@ export class Timeline {
       srcStart: clip.srcStart ?? 0,
       // Source refs
       file: clip.file || null,
+      mediaUrl: clip.mediaUrl || null,
+      audioData: clip.audioData || null,
       videoElement: clip.videoElement || null,
       imageElement: clip.imageElement || null,
       audioBuffer: clip.audioBuffer || null,

@@ -159,7 +159,7 @@ export class TimelineUI {
     const left = clip.start * this.pixelsPerSecond;
     const width = clip.duration * this.pixelsPerSecond;
     el.style.left  = `${left}px`;
-    el.style.width = `${Math.max(width, 20)}px`;
+    el.style.width = `${Math.max(width, 2)}px`;
 
     // Thumbnail or waveform
     let thumbHtml = '';
@@ -308,10 +308,16 @@ export class TimelineUI {
     const pps = this.pixelsPerSecond;
     // Determine tick interval
     let interval = 1;
-    if (pps < 20)  interval = 10;
-    if (pps < 10)  interval = 30;
-    if (pps > 100) interval = 0.5;
-    if (pps > 200) interval = 0.25;
+    if (pps < 20)   interval = 5;
+    if (pps < 10)   interval = 15;
+    if (pps < 5)    interval = 30;
+    if (pps < 2)    interval = 60;     // 1 min
+    if (pps < 0.5)  interval = 300;    // 5 min
+    if (pps < 0.1)  interval = 600;    // 10 min
+    if (pps < 0.03) interval = 1800;   // 30 min
+    if (pps < 0.01) interval = 3600;   // 1 hr
+    if (pps > 100)  interval = 0.5;
+    if (pps > 200)  interval = 0.25;
 
     ctx.fillStyle   = '#555577';
     ctx.font        = '9px "JetBrains Mono", monospace';
@@ -412,8 +418,8 @@ export class TimelineUI {
           e.preventDefault();
           // Zoom factor: negative deltaY is zoom in, positive is zoom out
           const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-          // pixelsPerSecond range: 10px to 1024px
-          const newPps = Math.max(10, Math.min(1024, this.pixelsPerSecond * zoomFactor));
+          // pixelsPerSecond range: 0.01px to 1024px
+          const newPps = Math.max(0.01, Math.min(1024, this.pixelsPerSecond * zoomFactor));
 
           // Calculate time position under the mouse to anchor zoom
           const rect = this._tracksEl.getBoundingClientRect();
