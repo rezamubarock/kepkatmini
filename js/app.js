@@ -3,13 +3,13 @@
  * Wires all engines together: renderer, timeline, visualizer, subtitles, overlays, exporter
  */
 
-import { Renderer }        from './engine/renderer.js';
-import { Timeline }        from './engine/timeline.js';
-import { Visualizer }      from './engine/visualizer.js';
-import { Exporter }        from './engine/exporter.js';
-import { SubtitleManager } from './subtitle/subtitle.js';
-import { TimelineUI }      from './ui/timeline-ui.js';
-import { OverlayManager }  from './overlay/overlay.js';
+import { Renderer }        from './engine/renderer.js?v=3';
+import { Timeline }        from './engine/timeline.js?v=3';
+import { Visualizer }      from './engine/visualizer.js?v=3';
+import { Exporter }        from './engine/exporter.js?v=3';
+import { SubtitleManager } from './subtitle/subtitle.js?v=3';
+import { TimelineUI }      from './ui/timeline-ui.js?v=3';
+import { OverlayManager }  from './overlay/overlay.js?v=3';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
