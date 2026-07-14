@@ -883,7 +883,7 @@ class KepKatApp {
       barEl.style.width  = '5%';
 
       if (this._whisperWorker) this._whisperWorker.terminate();
-      this._whisperWorker = new Worker('./js/subtitle/whisper-worker.js');
+      this._whisperWorker = new Worker('./js/subtitle/whisper-worker.js?v=12');
 
       this._whisperWorker.onmessage = (e) => {
         const { type, value, text, segments, message } = e.data;
