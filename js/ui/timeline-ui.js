@@ -350,13 +350,28 @@ export class TimelineUI {
   }
 
   _setupDropZone() {
-    // Ruler / header seek
+    // Ruler / header seek & drag scrub
     if (this._rulerEl) {
-      this._rulerEl.addEventListener('click', (e) => {
+      const handleRulerScrub = (e) => {
         const rect = this._rulerEl.getBoundingClientRect();
+        // Calculate offset relative to canvas coordinate space
         const x = e.clientX - rect.left;
-        const t = x / this.pixelsPerSecond;
+        const t = Math.max(0, x / this.pixelsPerSecond);
         this.onSeek(t);
+      };
+
+      this._rulerEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        handleRulerScrub(e);
+        const onMove = (e2) => {
+          handleRulerScrub(e2);
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
       });
     }
 
@@ -380,6 +395,22 @@ export class TimelineUI {
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
       });
+    }
+
+    // Scroll sync between tracks and ruler wrapper
+    if (this._tracksEl) {
+      this._tracksEl.addEventListener('scroll', () => {
+        const wrapper = document.getElementById('timeline-ruler-wrapper');
+        if (wrapper) wrapper.scrollLeft = this._tracksEl.scrollLeft;
+      });
+
+      // Mouse wheel horizontal scroll on tracks area
+      this._tracksEl.addEventListener('wheel', (e) => {
+        if (Math.abs(e.deltaY) > 0 && !e.shiftKey) {
+          e.preventDefault();
+          this._tracksEl.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
     }
   }
 

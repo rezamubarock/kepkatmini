@@ -121,7 +121,7 @@ export class Visualizer {
         
         for (let i = 0; i < count; i++) {
           const val = (data[i] / 255) * sens * 0.5;
-          const h = Math.max(2, val * maxH);
+          const h = Math.max(2, Math.min(maxH, val * maxH));
           const x = i * barW;
           const y = canvasH - h;
           const grad = targetCtx.createLinearGradient(x, y, x, canvasH);
@@ -149,9 +149,9 @@ export class Visualizer {
         targetCtx.shadowColor = this.settings.color1;
         
         for (let i = 0; i < count; i++) {
-          const val = (data[i] / 128 - 1) * canvasH * 0.4 * sens * 0.2;
+          const val = (data[i] / 128 - 1) * canvasH * 0.45 * sens * 0.2;
           const x = i * stepX;
-          const y = canvasH / 2 + val;
+          const y = Math.max(2, Math.min(canvasH - 2, canvasH / 2 + val));
           i === 0 ? targetCtx.moveTo(x, y) : targetCtx.lineTo(x, y);
         }
         targetCtx.stroke();
@@ -161,32 +161,37 @@ export class Visualizer {
         const count = Math.min(data.length, 128);
         const cx = canvasW / 2;
         const cy = canvasH / 2;
-        const baseR = Math.min(canvasW, canvasH) * 0.2;
-        const maxDelta = Math.min(canvasW, canvasH) * 0.25;
+        
+        // Stretch circle into responsive ellipse matching visualizer box bounds
+        const baseRx = canvasW * 0.25;
+        const baseRy = canvasH * 0.25;
+        const maxDeltaX = canvasW * 0.2;
+        const maxDeltaY = canvasH * 0.2;
         const angleStep = (Math.PI * 2) / count;
         
         targetCtx.beginPath();
         targetCtx.lineWidth = 2;
-        targetCtx.strokeStyle = this._gradient(targetCtx, cx - baseR * 2, cy, cx + baseR * 2, cy);
+        targetCtx.strokeStyle = this._gradient(targetCtx, cx - baseRx * 2, cy, cx + baseRx * 2, cy);
         targetCtx.shadowBlur = 12;
         targetCtx.shadowColor = this.settings.color1;
         
         for (let i = 0; i <= count; i++) {
           const idx = i % count;
-          const val = (data[idx] / 255) * maxDelta * sens * 0.3;
-          const r = baseR + val;
+          const val = (data[idx] / 255) * sens * 0.3;
+          const rx = baseRx + val * maxDeltaX;
+          const ry = baseRy + val * maxDeltaY;
           const angle = angleStep * i - Math.PI / 2;
-          const x = cx + r * Math.cos(angle);
-          const y = cy + r * Math.sin(angle);
+          const x = cx + rx * Math.cos(angle);
+          const y = cy + ry * Math.sin(angle);
           i === 0 ? targetCtx.moveTo(x, y) : targetCtx.lineTo(x, y);
         }
         targetCtx.closePath();
         targetCtx.stroke();
         
         // Inner fill
-        const rg = this._radialGradient(targetCtx, cx, cy, baseR);
+        const rg = this._radialGradient(targetCtx, cx, cy, Math.min(baseRx, baseRy));
         targetCtx.beginPath();
-        targetCtx.arc(cx, cy, baseR, 0, Math.PI * 2);
+        targetCtx.ellipse(cx, cy, baseRx, baseRy, 0, 0, Math.PI * 2);
         targetCtx.fillStyle = rg;
         targetCtx.globalAlpha = 0.15;
         targetCtx.fill();
@@ -201,7 +206,7 @@ export class Visualizer {
         targetCtx.beginPath();
         targetCtx.moveTo(0, canvasH);
         for (let i = 0; i < count; i++) {
-          const val = (data[i] / 255) * maxH * sens * 0.4;
+          const val = Math.max(0, Math.min(maxH, (data[i] / 255) * maxH * sens * 0.4));
           const x = i * stepX;
           targetCtx.lineTo(x, canvasH - val);
         }
@@ -222,7 +227,6 @@ export class Visualizer {
         const cx = canvasW / 2;
         const cy = canvasH / 2;
         const sz = Math.min(canvasW, canvasH);
-        // Emit new particles based on audio energy
         const energy = data.reduce((a, v) => a + v, 0) / data.length / 255;
         const count = Math.floor(energy * sens * 3);
         
@@ -233,20 +237,22 @@ export class Visualizer {
             x: cx, y: cy,
             vx: Math.cos(angle) * speed * (0.5 + Math.random()),
             vy: Math.sin(angle) * speed * (0.5 + Math.random()) - sz * 0.01,
-            size: 2 + Math.random() * 4,
+            size: Math.max(1, 2 + Math.random() * 4),
             life: 1.0,
             decay: 0.02 + Math.random() * 0.03,
             color: Math.random() < 0.5 ? this.settings.color1 : this.settings.color2,
           });
         }
         
-        // Update & draw particles
         this._particles = this._particles.filter(p => p.life > 0);
         for (const p of this._particles) {
           p.x += p.vx;
           p.y += p.vy;
-          p.vy += 0.1; // gravity
+          p.vy += 0.1;
           p.life -= p.decay;
+          
+          p.x = Math.max(0, Math.min(canvasW, p.x));
+          p.y = Math.max(0, Math.min(canvasH, p.y));
           
           targetCtx.beginPath();
           targetCtx.globalAlpha = p.life;

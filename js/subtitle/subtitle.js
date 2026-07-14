@@ -104,14 +104,46 @@ export class SubtitleManager {
     this._addParsed(parsed);
   }
 
+  _splitSegmentText(text, start, end, maxWords = 4) {
+    const words = text.trim().split(/\s+/);
+    if (words.length <= maxWords) {
+      return [{ start, end, text }];
+    }
+
+    const result = [];
+    const totalWords = words.length;
+    const duration = end - start;
+    const numChunks = Math.ceil(totalWords / maxWords);
+
+    for (let i = 0; i < numChunks; i++) {
+      const chunkWords = words.slice(i * maxWords, (i + 1) * maxWords);
+      const chunkText = chunkWords.join(' ');
+
+      // Calculate proportional start and end times
+      const chunkStart = start + (i * maxWords / totalWords) * duration;
+      const chunkEnd   = start + (((i + 1) * maxWords) / totalWords) * duration;
+
+      result.push({
+        start: chunkStart,
+        end: Math.min(chunkEnd, end),
+        text: chunkText,
+      });
+    }
+
+    return result;
+  }
+
   _addParsed(parsed) {
     for (const s of parsed) {
-      this.subtitles.push({
-        id: `sub_${this._nextId++}`,
-        start: s.start,
-        end: s.end,
-        text: s.text,
-      });
+      const split = this._splitSegmentText(s.text, s.start, s.end, 4);
+      for (const item of split) {
+        this.subtitles.push({
+          id: `sub_${this._nextId++}`,
+          start: item.start,
+          end: item.end,
+          text: item.text,
+        });
+      }
     }
     this._sortSubtitles();
     this._emit('changed', this.subtitles);
@@ -120,12 +152,15 @@ export class SubtitleManager {
   /** Import from Whisper output (array of {start, end, text} segments) */
   importWhisperSegments(segments) {
     for (const seg of segments) {
-      this.subtitles.push({
-        id: `sub_${this._nextId++}`,
-        start: seg.start,
-        end: seg.end,
-        text: seg.text.trim(),
-      });
+      const split = this._splitSegmentText(seg.text, seg.start, seg.end, 4);
+      for (const item of split) {
+        this.subtitles.push({
+          id: `sub_${this._nextId++}`,
+          start: item.start,
+          end: item.end,
+          text: item.text,
+        });
+      }
     }
     this._sortSubtitles();
     this._emit('changed', this.subtitles);
