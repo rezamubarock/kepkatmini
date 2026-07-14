@@ -10,7 +10,7 @@ import { Exporter }        from './engine/exporter.js?v=7';
 import { SubtitleManager } from './subtitle/subtitle.js?v=7';
 import { TimelineUI }      from './ui/timeline-ui.js?v=7';
 import { OverlayManager }  from './overlay/overlay.js?v=7';
-import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=9';
+import { extractAudioWebCodecs } from './subtitle/audio-extractor.js?v=10';
 
 /* ─── BUILT-IN EMOJI STICKER SETS ─── */
 const STICKER_SETS = {
@@ -395,16 +395,7 @@ class KepKatApp {
       const id  = `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const url = URL.createObjectURL(safeFile);
 
-      // Extract audio data immediately using the safe cloned File object
-      let audioData = null;
-      if (type === 'video' || type === 'audio') {
-        try {
-          audioData = await this._extractAudio(url);
-        } catch (err) {
-          console.warn('Gagal ekstrak audio langsung saat import:', err);
-        }
-      }
-
+      // audioData is extracted lazily — only when Auto Subtitle is triggered
       let duration = 5;
       let thumbnailUrl = null;
 
@@ -418,7 +409,7 @@ class KepKatApp {
         thumbnailUrl = url;
       }
 
-      mediaStore.set(id, { id, file: safeFile, url, type, duration, name: safeFile.name, thumbnailUrl, audioData });
+      mediaStore.set(id, { id, file: safeFile, url, type, duration, name: safeFile.name, thumbnailUrl, audioData: null });
       this._renderMediaItem(id);
 
       // Auto-add to first available track
