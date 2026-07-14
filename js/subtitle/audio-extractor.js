@@ -22,6 +22,18 @@ function loadMP4Box() {
   });
 }
 
+const SAMPLING_FREQUENCIES = [
+  96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350
+];
+
+function getAACConfigDescriptor(audioObjectType, sampleRate, channelCount) {
+  const refIndex = SAMPLING_FREQUENCIES.indexOf(sampleRate);
+  const freqIndex = refIndex !== -1 ? refIndex : 4;
+  const byte1 = (audioObjectType << 3) | (freqIndex >> 1);
+  const byte2 = ((freqIndex & 1) << 7) | (channelCount << 3);
+  return new Uint8Array([byte1, byte2]);
+}
+
 export async function extractAudioWebCodecs(file, onProgress) {
   const MP4Box = await loadMP4Box();
   
@@ -117,11 +129,15 @@ export async function extractAudioWebCodecs(file, onProgress) {
 
       // Configure decoder
       try {
+        let description = audioTrack.description;
+        if (!description && audioTrack.codec.startsWith('mp4a')) {
+          description = getAACConfigDescriptor(2, sampleRate, audioTrack.audio.channel_count);
+        }
         decoder.configure({
           codec: audioTrack.codec.startsWith('mp4a') ? 'mp4a.40.2' : audioTrack.codec, // Map generic AAC to AAC LC
           numberOfChannels: audioTrack.audio.channel_count,
           sampleRate: sampleRate,
-          description: audioTrack.description // Passed directly as Uint8Array by MP4Box
+          description: description
         });
         isConfigured = true;
       } catch (err) {
