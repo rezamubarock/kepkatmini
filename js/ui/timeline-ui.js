@@ -98,17 +98,19 @@ export class TimelineUI {
 
     const totalDuration = Math.max(this.timeline.duration + 5, 30);
     const totalW = totalDuration * this.pixelsPerSecond;
-    el.style.minWidth = `${totalW}px`;
+    el.style.minWidth = "";
 
     for (const track of this.timeline.tracks) {
       const row = document.createElement('div');
       row.className = 'timeline-track';
       row.dataset.trackId = track.id;
       row.style.height = '44px';
+      row.style.width = `${totalW}px`;
+      row.style.minWidth = `${totalW}px`;
 
       const clipsArea = document.createElement('div');
       clipsArea.className = 'track-clips-area';
-      clipsArea.style.minWidth = `${totalW}px`;
+      clipsArea.style.minWidth = `${totalW - 120}px`;
 
       for (const clip of track.clips) {
         const clipEl = this._buildClipElement(clip, track.type);

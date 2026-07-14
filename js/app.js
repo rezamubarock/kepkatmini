@@ -511,6 +511,7 @@ class KepKatApp {
     if (!media) return;
 
     let videoElement = null, imageElement = null;
+    let audioData = null;
 
     if (media.type === 'video' || media.type === 'audio') {
       const vid = document.createElement('video');
@@ -520,6 +521,13 @@ class KepKatApp {
       vid.playsInline = true;
       await vid.load();
       videoElement = vid;
+
+      // Extract audio immediately while file reference is readable
+      try {
+        audioData = await this._extractAudio(media.file);
+      } catch (err) {
+        console.warn('Gagal ekstrak audio saat impor:', err);
+      }
     } else if (media.type === 'image') {
       const img = new Image();
       img.src = media.url;
@@ -529,6 +537,7 @@ class KepKatApp {
 
     const clip = this.timeline.addClip(trackId, {
       file: media.file,
+      audioData,
       type: media.type,
       name: media.name,
       start: startTime,
@@ -844,15 +853,18 @@ class KepKatApp {
     const textEl    = document.getElementById('whisper-text');
     statusDiv.classList.remove('hidden');
 
-    // Extract audio from video file
+    // Use pre-extracted audio data if available, or extract it now
     const clip = clips[0];
+    let audioData = clip.audioData;
     const file = clip.file;
 
     try {
-      if (!file) {
-        throw new Error('File sumber klip video tidak ditemukan.');
+      if (!audioData) {
+        if (!file) {
+          throw new Error('Data audio belum diekstrak dan file sumber tidak ditemukan.');
+        }
+        audioData = await this._extractAudio(file);
       }
-      const audioData = await this._extractAudio(file);
       textEl.textContent = 'Memuat model AI Whisper...';
       barEl.style.width  = '5%';
 
